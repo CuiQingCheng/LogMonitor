@@ -3,6 +3,16 @@
 #include <QIODevice>
 #include <QTime>
 #include "qdebug.h"
+#include <QStringList>
+
+#include "udpclient.h"
+#include "backupmodule.h"
+
+#define PREWDNUM 1000
+#define LINEWDLEN 500
+
+int dursec = 0;
+
 
 QString getDuration(QTime startTime, QTime endTime);
 void storeTimeInfo(QString timeInfo);
@@ -20,7 +30,7 @@ int main(int argc, char *argv[])
 
 void monitorBootupLog()
 {
-    QFile file("/home/mingxing/bootup.log");
+    QFile file("/log/messages");
 
 
     if(!file.open(QIODevice::ReadOnly)){
@@ -29,17 +39,40 @@ void monitorBootupLog()
         qDebug()<<"open log file succeeded.";
     }
 
+    float ext_time = 0.0;
     //move to the end of the file
     quint64 startingPos;
     startingPos = file.size();
-    file.seek(startingPos);
+    file.seek(startingPos-PREWDNUM);
+    QString timeInfo;
+    bool isrestart = false;
 
-
+    udpClient* client = udpClient::getSingleton();
     QTime startTime = QTime::currentTime();
     qDebug()<<"start monitoring the target app("<<startTime.toString()<<").."<<endl;
     while(true)
     {
-        QByteArray lineRead = file.readAll();
+        QByteArray lineRead = file.readLine(LINEWDLEN);
+
+        if(lineRead.contains("EXT4-fs (sda4)"))
+        {
+            QString strLine = QString(lineRead);
+            QStringList strlst1 = strLine.split('[');
+            if(strlst1.size() > 1)
+            {
+                QStringList strlst2 = (strlst1[1]).split(']');
+                if(strlst2.size()>1)
+                {
+                    QString extstr = strlst2[0];
+                    ext_time = extstr.toFloat();
+                }
+            }
+        }
+        if(lineRead.contains("NetX is restart"))
+        {
+            isrestart = true;
+        }
+
         if(lineRead.contains("netx_version"))
         {
             QTime endTime = QTime::currentTime();
@@ -47,22 +80,42 @@ void monitorBootupLog()
             qDebug()<<"duration:"<<getDuration(startTime, endTime)<<endl;
 
             //store bootup time info
-            QString timeInfo = "start time "+startTime.toString()+
+            if(ext_time > 0)
+            {
+                timeInfo.append(QString("ext_time %1\n").arg(ext_time));
+            }
+            QString netxtimestr = "start time "+startTime.toString()+
                     "\nend time   "+endTime.toString()+
-                    "\nduration   "+getDuration(startTime, endTime)+"\n\n";
+                    "\nduration   "+getDuration(startTime, endTime)+"\n";
+            timeInfo.append(netxtimestr);
+            if(isrestart)
+            {
+                timeInfo.append("NetX is restart\n\n");
+            }
+
+            QByteArray msg = "Net is started";
+            msg.append(QString(" ext_time: %1;").arg(ext_time));
+            msg.append(QString(" dur_time:%1").arg(dursec));
+
+            if(ext_time+dursec > 21)
+            {
+                backupModule::bakFile();
+            }
+
+            client->setMessage(msg);
             storeTimeInfo(timeInfo);
-            //reboot the app
+            break;
 		//system("reboot");
         }
 
         //keep the reading buffer size reasonable
-        quint64 currentSize = file.size();
-        if(currentSize - startingPos > 1024 * 64)
-        {
-            //move to the next reading position
-            startingPos = currentSize;
-            file.seek(startingPos);
-        }
+//        quint64 currentSize = file.size();
+//        if(currentSize - startingPos > 1024 * 64)
+//        {
+//            //move to the next reading position
+//            startingPos = currentSize;
+//            file.seek(startingPos);
+//        }
 
     }
 }
@@ -92,8 +145,8 @@ QString getDuration(QTime startTime, QTime endTime)
 
     QString duration;
     duration.sprintf("%02d:%02d:%02d", hourMargin, minuteMargin, secondMargin);
+    dursec = hourMargin*3600 + minuteMargin*60 + secondMargin;
     return duration;
-
 }
 
 void storeTimeInfo(QString timeInfo)

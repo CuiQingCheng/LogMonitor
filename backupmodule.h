@@ -7,11 +7,13 @@ class backupModule : public QObject
 {
     Q_OBJECT
 public:
-    explicit backupModule(QObject *parent = 0);
+   backupModule();
 
 signals:
 
-public slots:
+public :
+   static void bakFile();
+
 };
 
 #endif // BACKUPMODULE_H

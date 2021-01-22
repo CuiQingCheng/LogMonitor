@@ -2,16 +2,27 @@
 #define UDPCLIENT_H
 
 #include <QObject>
+#include <QUdpSocket>
+#include <QString>
 
 class udpClient : public QObject
 {
     Q_OBJECT
+private:
+ udpClient()
+ {
+    m_udpSocket = new QUdpSocket;
+ }
+ static udpClient* m_client;
+ QUdpSocket* m_udpSocket;
+
 public:
-    explicit udpClient(QObject *parent = 0);
+ static udpClient* getSingleton()
+ {
+     return m_client;
+ }
+ void setMessage(QByteArray msg);
 
-signals:
-
-public slots:
 };
 
 #endif // UDPCLIENT_H
