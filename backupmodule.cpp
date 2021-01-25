@@ -15,8 +15,8 @@ void backupModule::bakFile()
 {
     QDateTime currentTime = QDateTime::currentDateTime();
     int timeT = currentTime.toTime_t();
-    QString strMsg = QString("copeMsg%1").arg(timeT);
-    QString strXor = QString("copeXor%1").arg(timeT);
+    QString strMsg = QString("Msgcope21%1").arg(timeT);
+    QString strXor = QString("Xorcope21%1").arg(timeT);
     QFile fileSourMsg(SOURFILE1);
     QFile fileSourXor(SOURFILE2);
 

@@ -4,11 +4,12 @@
 #include <QTime>
 #include "qdebug.h"
 #include <QStringList>
+#include <QThread>
 
 #include "udpclient.h"
 #include "backupmodule.h"
 
-#define PREWDNUM 1000
+#define PREWDNUM 4500
 #define LINEWDLEN 500
 
 int dursec = 0;
@@ -23,6 +24,7 @@ void monitorBootupLog();
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
+    qDebug() << "LogMonitor started...";
     monitorBootupLog();
     return a.exec();
 }
@@ -36,7 +38,7 @@ void monitorBootupLog()
     if(!file.open(QIODevice::ReadOnly)){
         qDebug()<<"open log file failed.";
     }else{
-        qDebug()<<"open log file succeeded.";
+
     }
 
     float ext_time = 0.0;
@@ -50,10 +52,10 @@ void monitorBootupLog()
     udpClient* client = udpClient::getSingleton();
     QTime startTime = QTime::currentTime();
     qDebug()<<"start monitoring the target app("<<startTime.toString()<<").."<<endl;
+
     while(true)
     {
-        QByteArray lineRead = file.readLine(LINEWDLEN);
-
+        QString lineRead = file.readLine(LINEWDLEN);
         if(lineRead.contains("EXT4-fs (sda4)"))
         {
             QString strLine = QString(lineRead);
@@ -68,16 +70,23 @@ void monitorBootupLog()
                 }
             }
         }
+
+        if(lineRead.isNull())
+        {
+            break;
+        }
+
+        qDebug()<<lineRead;
         if(lineRead.contains("NetX is restart"))
         {
             isrestart = true;
         }
 
-        if(lineRead.contains("netx_version"))
+        if(lineRead.contains("NetX version"))
         {
             QTime endTime = QTime::currentTime();
             qDebug()<<"the monitored app is now up and running("<<endTime.toString()<<").."<<endl;
-            qDebug()<<"duration:"<<getDuration(startTime, endTime)<<endl;
+            QString strDuration = getDuration(startTime, endTime);
 
             //store bootup time info
             if(ext_time > 0)
@@ -86,14 +95,14 @@ void monitorBootupLog()
             }
             QString netxtimestr = "start time "+startTime.toString()+
                     "\nend time   "+endTime.toString()+
-                    "\nduration   "+getDuration(startTime, endTime)+"\n";
+                    "\nduration   "+strDuration+"\n";
             timeInfo.append(netxtimestr);
             if(isrestart)
             {
                 timeInfo.append("NetX is restart\n\n");
             }
 
-            QByteArray msg = "Net is started";
+            QByteArray msg = "NetX is started";
             msg.append(QString(" ext_time: %1;").arg(ext_time));
             msg.append(QString(" dur_time:%1").arg(dursec));
 
@@ -104,6 +113,7 @@ void monitorBootupLog()
 
             client->setMessage(msg);
             storeTimeInfo(timeInfo);
+
             break;
 		//system("reboot");
         }
@@ -118,6 +128,7 @@ void monitorBootupLog()
 //        }
 
     }
+
 }
 
 QString getDuration(QTime startTime, QTime endTime)
@@ -151,13 +162,13 @@ QString getDuration(QTime startTime, QTime endTime)
 
 void storeTimeInfo(QString timeInfo)
 {
-    QFile file("/home/mingxing/timespent_tobootup.log");
+    QFile file("/log/timespent_tobootup.log");
 
     //open file
-    if(!file.open(QIODevice::Append)){
+    if(!file.open(QIODevice::ReadWrite | QIODevice::Append)){
         qDebug()<<"open file failed.";
     }else{
-        //qDebug()<<"open file succeeded.";
+        qDebug()<<"open file succeeded.";
     }
     int writtenLength = file.write(timeInfo.toLatin1(),timeInfo.length());
     if(writtenLength == -1)
@@ -165,4 +176,5 @@ void storeTimeInfo(QString timeInfo)
         qDebug()<<"written time info failed"<<endl;
     }
     file.close();
+    qDebug()<< "file.close()";
 }
